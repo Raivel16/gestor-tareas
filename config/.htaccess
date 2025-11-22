@@ -1,0 +1,4 @@
+# Deny access to config files
+<Files ~ "\.(php)$">
+    Require all denied
+</Files>

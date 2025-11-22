@@ -1,429 +1,739 @@
-// Script.js - Funcionalidad del Tablero Kanban
+// Script.js - Funcionalidad del Tablero Kanban con soporte de archivos y notificaciones
 
-let currentUser = null;
 let currentTaskId = null;
 let currentColumn = null;
 let editingTaskId = null;
 let allTasks = [];
+let currentImageFile = null;
+let keepCurrentImage = true;
 
-document.addEventListener('DOMContentLoaded', () => {
-    initializeApp();
-    setupEventListeners();
-    loadTasks();
-    renderTasks();
+document.addEventListener("DOMContentLoaded", () => {
+  setupEventListeners();
+  loadTasks();
 });
 
-function initializeApp() {
-    const user = localStorage.getItem('currentUser');
-    if (!user) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    currentUser = JSON.parse(user);
-    console.log('[v0] Usuario autenticado:', currentUser);
-}
-
 function setupEventListeners() {
-    // Logout
-    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  // Logout
+  document.getElementById("logoutBtn").addEventListener("click", handleLogout);
 
-    // Task Form
-    const taskForm = document.getElementById('taskForm');
-    if (taskForm) {
-        taskForm.addEventListener('submit', handleTaskSubmit);
-    }
+  // Task Form
+  const taskForm = document.getElementById("taskForm");
+  if (taskForm) {
+    taskForm.addEventListener("submit", handleTaskSubmit);
+  }
 
-    // Search
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', handleSearch);
-    }
+  // Search
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) {
+    searchInput.addEventListener("input", handleSearch);
+  }
 
-    // Drag and Drop
-    setupDragAndDrop();
+  // Suggest Order Button
+  const suggestOrderBtn = document.getElementById("suggestOrderBtn");
+  if (suggestOrderBtn) {
+    suggestOrderBtn.addEventListener("click", handleSuggestOrder);
+  }
+
+  // Drag and Drop
+  setupDragAndDrop();
 }
 
 function setupDragAndDrop() {
-    const containers = document.querySelectorAll('.tasks-container');
+  const containers = document.querySelectorAll(".tasks-container");
 
-    containers.forEach(container => {
-        container.addEventListener('dragover', handleDragOver);
-        container.addEventListener('drop', handleDrop);
-        container.addEventListener('dragleave', handleDragLeave);
-    });
+  containers.forEach((container) => {
+    container.addEventListener("dragover", handleDragOver);
+    container.addEventListener("drop", handleDrop);
+    container.addEventListener("dragleave", handleDragLeave);
+  });
 }
 
 function handleDragStart(e) {
-    const taskCard = e.target.closest('.task-card');
-    if (!taskCard) return;
+  const taskCard = e.target.closest(".task-card");
+  if (!taskCard) return;
 
-    taskCard.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('taskId', taskCard.dataset.taskId);
+  taskCard.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("taskId", taskCard.dataset.taskId);
+  e.dataTransfer.setData("sourceColumn", taskCard.dataset.column);
 }
 
 function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    this.classList.add('drag-over');
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+
+  const container = e.currentTarget;
+  const draggingCard = document.querySelector(".dragging");
+
+  if (!draggingCard) return;
+
+  // Obtener el elemento sobre el que estamos
+  const afterElement = getDragAfterElement(container, e.clientY);
+
+  if (afterElement == null) {
+    container.appendChild(draggingCard);
+  } else {
+    container.insertBefore(draggingCard, afterElement);
+  }
+
+  container.classList.add("drag-over");
 }
 
 function handleDragLeave(e) {
-    if (e.target === this) {
-        this.classList.remove('drag-over');
-    }
+  if (e.target === e.currentTarget) {
+    e.currentTarget.classList.remove("drag-over");
+  }
 }
 
-function handleDrop(e) {
-    e.preventDefault();
-    this.classList.remove('drag-over');
+/**
+ * Determina después de qué elemento debe insertarse la tarjeta arrastrada
+ * Corrige el bug de no poder arrastrar del final al inicio
+ */
+function getDragAfterElement(container, y) {
+  const draggableElements = [
+    ...container.querySelectorAll(".task-card:not(.dragging)"),
+  ];
 
-    const taskId = e.dataTransfer.getData('taskId');
-    const newColumn = this.dataset.column;
+  return draggableElements.reduce(
+    (closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
 
-    const task = allTasks.find(t => t.id === taskId);
-    if (task) {
-        task.column = newColumn;
-        saveTasks();
-        renderTasks();
-    }
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    },
+    { offset: Number.NEGATIVE_INFINITY }
+  ).element;
+}
 
-    // Remover clase dragging
-    document.querySelectorAll('.task-card.dragging').forEach(card => {
-        card.classList.remove('dragging');
+async function handleDrop(e) {
+  e.preventDefault();
+  const container = e.currentTarget;
+  container.classList.remove("drag-over");
+
+  const taskId = parseInt(e.dataTransfer.getData("taskId"));
+  const sourceColumn = e.dataTransfer.getData("sourceColumn");
+  const newColumn = container.dataset.column;
+
+  // Remover clase dragging
+  const draggingCard = document.querySelector(".dragging");
+  if (draggingCard) {
+    draggingCard.classList.remove("dragging");
+  }
+
+  if (sourceColumn === newColumn) {
+    // Reordenar dentro de la misma columna
+    await updateColumnOrder(newColumn);
+  } else {
+    // Mover a otra columna
+    await moveTaskToColumn(taskId, newColumn);
+  }
+}
+
+async function moveTaskToColumn(taskId, newColumn) {
+  try {
+    showLoading("Moviendo tarea...");
+
+    const response = await fetch("api/tasks.php?action=move", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: taskId, column: newColumn }),
     });
+
+    const result = await response.json();
+
+    hideLoading();
+
+    if (result.success) {
+      await loadTasks();
+      showToast("Tarea movida exitosamente", "success");
+    } else {
+      showToast(result.message || "Error al mover la tarea", "error");
+      await loadTasks(); // Recargar para revertir cambios visuales
+    }
+  } catch (error) {
+    hideLoading();
+    console.error("Error:", error);
+    showToast("Error de conexión al mover la tarea", "error");
+    await loadTasks();
+  }
+}
+
+async function updateColumnOrder(column) {
+  const container = document.querySelector(
+    `.tasks-container[data-column="${column}"]`
+  );
+  const taskCards = container.querySelectorAll(".task-card");
+  const order = Array.from(taskCards).map((card) =>
+    parseInt(card.dataset.taskId)
+  );
+
+  try {
+    const response = await fetch("api/tasks.php?action=reorder", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ column, order }),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      showToast(result.message || "Error al reordenar las tareas", "error");
+      await loadTasks(); // Recargar para revertir cambios visuales
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    showToast("Error de conexión al reordenar tareas", "error");
+    await loadTasks();
+  }
 }
 
 function openTaskModal(column) {
-    currentColumn = column;
-    editingTaskId = null;
-    currentTaskId = null;
+  currentColumn = column;
+  editingTaskId = null;
+  currentImageFile = null;
+  keepCurrentImage = false;
 
-    document.getElementById('modalTitle').textContent = 'Nueva Tarea';
-    document.getElementById('taskForm').reset();
-    document.getElementById('imagePreview').innerHTML = '';
+  document.getElementById("modalTitle").textContent = "Nueva Tarea";
+  document.getElementById("taskForm").reset();
+  document.getElementById("imagePreview").innerHTML = "";
 
-    document.getElementById('taskModal').classList.remove('hidden');
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("taskDate").min = today;
+
+  const modal = document.getElementById("taskModal");
+  modal.classList.remove("hidden");
 }
 
 function closeTaskModal() {
-    document.getElementById('taskModal').classList.add('hidden');
-    currentColumn = null;
-    editingTaskId = null;
+  const modal = document.getElementById("taskModal");
+  modal.classList.add("hidden");
+  currentColumn = null;
+  editingTaskId = null;
+  currentImageFile = null;
+  keepCurrentImage = false;
 }
 
-function closeTaskDetailModal() {
-    document.getElementById('taskDetailModal').classList.add('hidden');
-    currentTaskId = null;
+async function handleTaskSubmit(e) {
+  e.preventDefault();
+
+  const title = document.getElementById("taskTitle").value.trim();
+  const description = document.getElementById("taskDescription").value.trim();
+  const date = document.getElementById("taskDate").value;
+  const priority = document.getElementById("taskPriority").value;
+  const tag = document.getElementById("taskTag").value.trim();
+
+  // Validación estricta
+  if (!title || !description || !date || !priority || !tag) {
+    showToast("Todos los campos son obligatorios (excepto imagen)", "warning");
+    return;
+  }
+
+  const taskData = {
+    title,
+    description,
+    date,
+    priority,
+    tag,
+    column: currentColumn,
+  };
+
+  try {
+    showLoading(editingTaskId ? "Actualizando tarea..." : "Creando tarea...");
+
+    let response;
+
+    // Si hay imagen nueva, usar FormData
+    if (currentImageFile) {
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("date", date);
+      formData.append("priority", priority);
+      formData.append("tag", tag);
+      formData.append("column", currentColumn);
+      formData.append("image", currentImageFile);
+
+      if (editingTaskId) {
+        formData.append("id", editingTaskId);
+        formData.append("keep_image", "false");
+        response = await fetch("api/tasks.php?action=update", {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        response = await fetch("api/tasks.php?action=create", {
+          method: "POST",
+          body: formData,
+        });
+      }
+    } else {
+      // Sin imagen nueva, usar JSON
+      if (editingTaskId) {
+        taskData.id = editingTaskId;
+        taskData.keep_image = keepCurrentImage;
+        response = await fetch("api/tasks.php?action=update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(taskData),
+        });
+      } else {
+        response = await fetch("api/tasks.php?action=create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(taskData),
+        });
+      }
+    }
+
+    const result = await response.json();
+
+    hideLoading();
+
+    if (result.success) {
+      closeTaskModal();
+      await loadTasks();
+      showToast(
+        editingTaskId ? "Tarea actualizada" : "Tarea creada",
+        "success"
+      );
+    } else {
+      showToast(result.message || "Error al guardar la tarea", "error");
+    }
+  } catch (error) {
+    hideLoading();
+    console.error("Error:", error);
+    showToast("Error de conexión al guardar la tarea", "error");
+  }
 }
 
 function previewImage(event) {
-    const file = event.target.files[0];
-    const preview = document.getElementById('imagePreview');
+  const file = event.target.files[0];
+  const preview = document.getElementById("imagePreview");
 
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-        };
-        reader.readAsDataURL(file);
-    }
-}
-
-function handleTaskSubmit(e) {
-    e.preventDefault();
-
-    const title = document.getElementById('taskTitle').value.trim();
-    const description = document.getElementById('taskDescription').value.trim();
-    const date = document.getElementById('taskDate').value;
-    const priority = document.getElementById('taskPriority').value;
-    const tag = document.getElementById('taskTag').value.trim();
-    const imageFile = document.getElementById('taskImage').files[0];
-
-    if (!title) {
-        alert('El título es requerido');
-        return;
+  if (file) {
+    // Validación de tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("La imagen no debe superar 5MB", "error");
+      event.target.value = "";
+      return;
     }
 
-    const task = {
-        id: editingTaskId || generateId(),
-        title,
-        description,
-        date,
-        priority,
-        tag,
-        image: null,
-        column: currentColumn,
-        createdAt: editingTaskId ? 
-            allTasks.find(t => t.id === editingTaskId).createdAt :
-            new Date().toISOString()
+    // Validación de tipo
+    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      showToast("Solo se permiten archivos JPG, PNG, GIF o WEBP", "error");
+      event.target.value = "";
+      return;
+    }
+
+    currentImageFile = file;
+    keepCurrentImage = false;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      preview.innerHTML = `
+        <img src="${e.target.result}" alt="Preview">
+        <button type="button" class="remove-image" onclick="removeImage()">✕</button>
+      `;
     };
-
-    if (imageFile) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            task.image = e.target.result;
-            saveTask(task);
-            closeTaskModal();
-        };
-        reader.readAsDataURL(imageFile);
-    } else {
-        saveTask(task);
-        closeTaskModal();
-    }
+    reader.readAsDataURL(file);
+  } else {
+    currentImageFile = null;
+    preview.innerHTML = "";
+  }
 }
 
-function saveTask(task) {
-    if (editingTaskId) {
-        const index = allTasks.findIndex(t => t.id === editingTaskId);
-        if (index !== -1) {
-            allTasks[index] = task;
-        }
-    } else {
-        allTasks.push(task);
-    }
-    saveTasks();
-    renderTasks();
-}
-
-function editTask(taskId) {
-
-    closeTaskDetailModal();
-
-    const task = allTasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    editingTaskId = taskId;
-    currentColumn = task.column;
-    currentTaskId = null;
-
-    document.getElementById('modalTitle').textContent = 'Editar Tarea';
-    document.getElementById('taskTitle').value = task.title;
-    document.getElementById('taskDescription').value = task.description;
-    document.getElementById('taskDate').value = task.date;
-    document.getElementById('taskPriority').value = task.priority;
-    document.getElementById('taskTag').value = task.tag;
-
-    if (task.image) {
-        document.getElementById('imagePreview').innerHTML = `<img src="${task.image}" alt="Task">`;
-    }
-
-    document.getElementById('taskModal').classList.remove('hidden');
-
-
-
-}
-
-function viewTaskDetail(taskId) {
-    const task = allTasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    currentTaskId = taskId;
-
-    let detailHTML = `
-        <div class="detail-section">
-            <div class="detail-label">Título</div>
-            <div class="detail-value">${escapeHtml(task.title)}</div>
-        </div>
-    `;
-
-    if (task.description) {
-        detailHTML += `
-            <div class="detail-section">
-                <div class="detail-label">Descripción</div>
-                <div class="detail-value">${escapeHtml(task.description)}</div>
-            </div>
-        `;
-    }
-
-    if (task.image) {
-        detailHTML += `<img src="${task.image}" alt="Task" class="detail-image">`;
-    }
-
-    if (task.date) {
-        detailHTML += `
-            <div class="detail-section">
-                <div class="detail-label">Fecha</div>
-                <div class="detail-value">${formatDate(task.date)}</div>
-            </div>
-        `;
-    }
-
-    detailHTML += `
-        <div class="detail-section">
-            <div class="detail-label">Prioridad</div>
-            <div class="detail-value">
-                <span class="task-priority ${task.priority}">
-                    ${getPriorityLabel(task.priority)}
-                </span>
-            </div>
-        </div>
-    `;
-
-    if (task.tag) {
-        detailHTML += `
-            <div class="detail-section">
-                <div class="detail-label">Categoría</div>
-                <div class="detail-value"><span class="task-tag">${escapeHtml(task.tag)}</span></div>
-            </div>
-        `;
-    }
-
-    detailHTML += `
-        <div class="detail-section">
-            <div class="detail-label">Creada el</div>
-            <div class="detail-value">${formatDate(task.createdAt)}</div>
-        </div>
-        <div class="modal-actions" style="justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 16px;">
-            <button type="button" class="btn btn-secondary" onclick="editTask('${taskId}')">Editar</button>
-        </div>
-    `;
-
-    document.getElementById('taskDetailContent').innerHTML = detailHTML;
-    document.getElementById('taskDetailModal').classList.remove('hidden');
-}
-
-function deleteCurrentTask() {
-    if (!currentTaskId) return;
-
-    if (confirm('¿Estás seguro de que deseas eliminar esta tarea?')) {
-        allTasks = allTasks.filter(t => t.id !== currentTaskId);
-        saveTasks();
-        closeTaskDetailModal();
-        renderTasks();
-    }
+function removeImage() {
+  document.getElementById("taskImage").value = "";
+  document.getElementById("imagePreview").innerHTML = "";
+  currentImageFile = null;
+  keepCurrentImage = false;
 }
 
 function renderTasks() {
-    const containers = document.querySelectorAll('.tasks-container');
+  const columns = ["todo", "inprogress", "done"];
 
-    containers.forEach(container => {
-        const column = container.dataset.column;
-        container.innerHTML = '';
+  columns.forEach((column) => {
+    const container = document.querySelector(
+      `.tasks-container[data-column="${column}"]`
+    );
+    const tasks = allTasks.filter((task) => task.columna === column);
 
-        const tasks = allTasks.filter(t => t.column === column);
+    container.innerHTML = "";
 
-        tasks.forEach(task => {
-            const taskCard = createTaskCard(task);
-            container.appendChild(taskCard);
-        });
-
-        // Actualizar contador
-        const counter = document.querySelector(`[data-column="${column}"]`).parentElement.querySelector('.task-count');
-        if (counter) {
-            counter.textContent = tasks.length;
-        }
+    tasks.forEach((task) => {
+      const taskCard = createTaskCard(task);
+      container.appendChild(taskCard);
     });
 
-    setupDragAndDrop();
+    // Actualizar contador
+    const countElement = document.querySelector(
+      `.task-count[data-column="${column}"]`
+    );
+    if (countElement) {
+      countElement.textContent = tasks.length;
+    }
+  });
 }
 
 function createTaskCard(task) {
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.dataset.taskId = task.id;
-    card.draggable = true;
+  const card = document.createElement("div");
+  card.className = "task-card";
+  card.draggable = true;
+  card.dataset.taskId = task.id;
+  card.dataset.column = task.columna;
 
-    let cardHTML = `<div class="task-title" onclick="viewTaskDetail('${task.id}')">${escapeHtml(task.title)}</div>`;
+  card.addEventListener("dragstart", handleDragStart);
+  card.addEventListener("click", () => openTaskDetailModal(task.id));
 
-    if (task.description) {
-        cardHTML += `<div class="task-description">${escapeHtml(task.description)}</div>`;
+  const priorityColors = {
+    high: "#ef4444",
+    medium: "#f59e0b",
+    low: "#10b981",
+  };
+
+  const priorityLabels = {
+    high: "Alta",
+    medium: "Media",
+    low: "Baja",
+  };
+
+  let imageHtml = "";
+  if (task.imagen_url) {
+    imageHtml = `<img src="${task.imagen_url}" alt="Task image" class="task-image">`;
+  }
+
+  card.innerHTML = `
+    ${imageHtml}
+    <div class="task-header">
+      <span class="task-priority" style="background-color: ${
+        priorityColors[task.prioridad]
+      }">
+        ${priorityLabels[task.prioridad]}
+      </span>
+    </div>
+    <h4 class="task-title">${escapeHtml(task.titulo)}</h4>
+    ${
+      task.descripcion
+        ? `<p class="task-description">${escapeHtml(task.descripcion)}</p>`
+        : ""
     }
+    <div class="task-meta">
+      ${
+        task.fecha_limite
+          ? `<span>📅 ${formatDate(task.fecha_limite)}</span>`
+          : ""
+      }
+      ${
+        task.curso
+          ? `<span class="task-tag">🎓 ${escapeHtml(task.curso)}</span>`
+          : ""
+      }
+    </div>
+  `;
 
-    if (task.image) {
-        cardHTML += `<img src="${task.image}" alt="Task" class="task-image" onclick="viewTaskDetail('${task.id}')">`;
+  return card;
+}
+
+function openTaskDetailModal(taskId) {
+  const task = allTasks.find((t) => t.id === taskId);
+  if (!task) return;
+
+  currentTaskId = taskId;
+
+  const priorityLabels = {
+    high: "Alta",
+    medium: "Media",
+    low: "Baja",
+  };
+
+  let imageHtml = "";
+  if (task.imagen_url) {
+    imageHtml = `
+      <div class="detail-image">
+        <img src="${task.imagen_url}" alt="Task image">
+      </div>
+    `;
+  }
+
+  const detailContent = document.getElementById("taskDetailContent");
+  detailContent.innerHTML = `
+    ${imageHtml}
+    <div class="detail-field">
+      <label>Título:</label>
+      <p>${escapeHtml(task.titulo)}</p>
+    </div>
+    ${
+      task.descripcion
+        ? `
+      <div class="detail-field">
+        <label>Descripción:</label>
+        <p>${escapeHtml(task.descripcion)}</p>
+      </div>
+    `
+        : ""
     }
-
-    const metaItems = [];
-
-    if (task.date) {
-        metaItems.push(`<div class="task-date">📅 ${formatDate(task.date)}</div>`);
+    <div class="detail-field">
+      <label>Prioridad:</label>
+      <p>${priorityLabels[task.prioridad]}</p>
+    </div>
+    ${
+      task.fecha_limite
+        ? `
+      <div class="detail-field">
+        <label>Fecha Límite:</label>
+        <p>${formatDate(task.fecha_limite)}</p>
+      </div>
+    `
+        : ""
     }
-
-    metaItems.push(`<span class="task-priority ${task.priority}">${getPriorityLabel(task.priority)}</span>`);
-
-    if (task.tag) {
-        metaItems.push(`<span class="task-tag">${escapeHtml(task.tag)}</span>`);
+    ${
+      task.curso
+        ? `
+      <div class="detail-field">
+        <label>Curso:</label>
+        <p>${escapeHtml(task.curso)}</p>
+      </div>
+    `
+        : ""
     }
+    <div class="detail-actions">
+      <button class="btn btn-primary" onclick="editTask(${taskId})">Editar</button>
+    </div>
+  `;
 
-    if (metaItems.length > 0) {
-        cardHTML += `<div class="task-meta">${metaItems.join('')}</div>`;
+  const modal = document.getElementById("taskDetailModal");
+  modal.classList.remove("hidden");
+}
+
+function closeTaskDetailModal() {
+  const modal = document.getElementById("taskDetailModal");
+  modal.classList.add("hidden");
+  currentTaskId = null;
+}
+
+function editTask(taskId) {
+  const task = allTasks.find((t) => t.id === taskId);
+  if (!task) return;
+
+  closeTaskDetailModal();
+
+  editingTaskId = taskId;
+  currentColumn = task.columna;
+  currentImageFile = null;
+  keepCurrentImage = true;
+
+  document.getElementById("modalTitle").textContent = "Editar Tarea";
+  document.getElementById("taskTitle").value = task.titulo;
+  document.getElementById("taskDescription").value = task.descripcion || "";
+  document.getElementById("taskDate").value = task.fecha_limite || "";
+  document.getElementById("taskPriority").value = task.prioridad;
+  document.getElementById("taskTag").value = task.curso || "";
+
+  // Mostrar imagen existente
+  const preview = document.getElementById("imagePreview");
+  if (task.imagen_url) {
+    preview.innerHTML = `
+      <img src="${task.imagen_url}" alt="Current image">
+      <button type="button" class="remove-image" onclick="removeImage()">✕</button>
+    `;
+  } else {
+    preview.innerHTML = "";
+  }
+
+  const modal = document.getElementById("taskModal");
+  modal.classList.remove("hidden");
+}
+
+function deleteCurrentTask() {
+  if (!currentTaskId) return;
+
+  showConfirm(
+    "Eliminar Tarea",
+    "¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.",
+    async () => {
+      try {
+        showLoading("Eliminando tarea...");
+
+        const response = await fetch("api/tasks.php?action=delete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id: currentTaskId }),
+        });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (result.success) {
+          closeTaskDetailModal();
+          await loadTasks();
+          showToast("Tarea eliminada exitosamente", "success");
+        } else {
+          showToast(result.message || "Error al eliminar la tarea", "error");
+        }
+      } catch (error) {
+        hideLoading();
+        console.error("Error:", error);
+        showToast("Error de conexión al eliminar la tarea", "error");
+      }
     }
+  );
+}
 
-    card.innerHTML = cardHTML;
+async function loadTasks() {
+  try {
+    const response = await fetch("api/tasks.php?action=list");
+    const result = await response.json();
 
-    card.addEventListener('dragstart', handleDragStart);
-    card.addEventListener('dragend', () => card.classList.remove('dragging'));
-
-    return card;
+    if (result.success) {
+      allTasks = result.data || [];
+      renderTasks();
+    } else {
+      showToast("Error al cargar las tareas", "error");
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    showToast("Error de conexión al cargar las tareas", "error");
+  }
 }
 
 function handleSearch(e) {
-    const query = e.target.value.toLowerCase();
+  const searchTerm = e.target.value.toLowerCase();
 
-    if (query === '') {
-        renderTasks();
-        return;
+  const taskCards = document.querySelectorAll(".task-card");
+  taskCards.forEach((card) => {
+    const title = card.querySelector(".task-title").textContent.toLowerCase();
+    const description = card.querySelector(".task-description");
+    const descText = description ? description.textContent.toLowerCase() : "";
+
+    if (title.includes(searchTerm) || descText.includes(searchTerm)) {
+      card.style.display = "";
+    } else {
+      card.style.display = "none";
     }
+  });
+}
 
-    const containers = document.querySelectorAll('.tasks-container');
-    containers.forEach(container => {
-        const cards = container.querySelectorAll('.task-card');
-        cards.forEach(card => {
-            const title = card.querySelector('.task-title').textContent.toLowerCase();
-            const description = card.querySelector('.task-description')?.textContent.toLowerCase() || '';
+async function handleSuggestOrder() {
+  showConfirm(
+    "Sugerir Orden con IA",
+    "¿Deseas que la IA analice tus tareas de 'Hacer' y sugiera un orden óptimo?",
+    async () => {
+      try {
+        showLoading("La IA está analizando tus tareas...");
 
-            if (title.includes(query) || description.includes(query)) {
-                card.style.display = 'flex';
-            } else {
-                card.style.display = 'none';
-            }
+        const response = await fetch("api/tasks.php?action=suggest_order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (result.success) {
+          // Mostrar explicación y botón para aplicar
+          showAIExplanation(
+            result.data.explanation,
+            result.data.count,
+            result.data.order
+          );
+        } else {
+          showToast(result.message || "Error al obtener sugerencia", "error");
+        }
+      } catch (error) {
+        hideLoading();
+        console.error("Error:", error);
+        showToast("Error de conexión con IA", "error");
+      }
+    }
+  );
+}
+
+async function applySuggestedOrder(order) {
+  try {
+    showLoading("Aplicando nuevo orden...");
+
+    const response = await fetch("api/tasks.php?action=reorder", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ column: "todo", order: order }),
     });
-}
 
-function handleLogout() {
-    if (confirm('¿Deseas cerrar sesión?')) {
-        localStorage.removeItem('currentUser');
-        window.location.href = 'login.html';
+    const result = await response.json();
+    hideLoading();
+
+    if (result.success) {
+      document.getElementById("aiModal").classList.add("hidden");
+      await loadTasks();
+      showToast("Orden aplicado exitosamente", "success");
+    } else {
+      showToast(result.message || "Error al aplicar orden", "error");
     }
+  } catch (error) {
+    hideLoading();
+    console.error("Error:", error);
+    showToast("Error al aplicar orden", "error");
+  }
 }
 
-function loadTasks() {
-    const saved = localStorage.getItem(`tasks_${currentUser.email}`);
-    if (saved) {
-        allTasks = JSON.parse(saved);
+async function handleLogout() {
+  showConfirm(
+    "Cerrar Sesión",
+    "¿Estás seguro de que deseas cerrar sesión?",
+    async () => {
+      try {
+        showLoading("Cerrando sesión...");
+
+        const response = await fetch("api/auth.php?action=logout", {
+          method: "POST",
+        });
+
+        hideLoading();
+
+        window.location.href = "login.php";
+      } catch (error) {
+        hideLoading();
+        console.error("Error:", error);
+        window.location.href = "login.php";
+      }
     }
+  );
 }
 
-function saveTasks() {
-    localStorage.setItem(`tasks_${currentUser.email}`, JSON.stringify(allTasks));
-}
-
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+// Utility Functions
+function escapeHtml(unsafe) {
+  if (!unsafe) return "";
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short'
-    });
-}
-
-function getPriorityLabel(priority) {
-    const labels = {
-        high: 'Alta',
-        medium: 'Media',
-        low: 'Baja'
-    };
-    return labels[priority] || priority;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const options = { year: "numeric", month: "short", day: "numeric" };
+  return date.toLocaleDateString("es-ES", options);
 }
