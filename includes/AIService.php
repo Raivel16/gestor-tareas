@@ -88,7 +88,7 @@ TAREAS:
 CRITERIOS:
 1. Urgencia (fecha límite)
 2. Prioridad (high > medium > low)
-3. Complejidad (título/descripción)
+3. Dificultad Estimada (basada en título/descripción: Baja, Media, Alta)
 
 INSTRUCCIONES DE RESPUESTA:
 - Devuelve SOLAMENTE un objeto JSON válido.
@@ -97,17 +97,17 @@ INSTRUCCIONES DE RESPUESTA:
 - El JSON debe tener esta estructura exacta:
 {
   "order": [1, 3, 2],
-  "explanation": "Primero la tarea 'Arreglar login' (ID 1) por urgencia. Luego 'Diseñar base de datos' (ID 3) por complejidad y prioridad alta. Finalmente 'Actualizar docs' (ID 2)."
+  "explanation": "Primero 'Arreglar login' (ID 1) por urgencia inmediata. Luego 'Diseñar BD' (ID 3) por Dificultad Alta y prioridad. Finalmente 'Docs' (ID 2) por Dificultad Baja."
 }
 
 IMPORTANTE:
-- En "explanation", usa los TÍTULOS de las tareas para que el usuario entienda el orden.
-- Sé conciso en la explicación.
+- En "explanation", MENCIONA EXPLÍCITAMENTE el nivel de dificultad estimado (Baja/Media/Alta) para justificar el orden.
+- Sé conciso pero claro.
 PROMPT;
         
         return $prompt;
     }
-    
+
     /**
      * Llama a la API de Groq
      */
