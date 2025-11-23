@@ -181,6 +181,26 @@ $nombre_usuario = $_SESSION['nombre_completo'] ?? 'Usuario';
         </div>
     </div>
 
+    <!-- AI Explanation Modal -->
+    <div id="aiModal" class="modal hidden">
+        <div class="modal-overlay" onclick="document.getElementById('aiModal').classList.add('hidden')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Sugerencia de la IA</h2>
+                <button class="modal-close" onclick="document.getElementById('aiModal').classList.add('hidden')">✕</button>
+            </div>
+            <div class="task-detail-content">
+                <div class="detail-field">
+                    <p id="aiExplanationText" style="white-space: pre-wrap; line-height: 1.6;"></p>
+                </div>
+                <div class="detail-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('aiModal').classList.add('hidden')">Cancelar</button>
+                    <button type="button" id="applyOrderBtn" class="btn btn-primary">Aplicar Orden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/notifications.js"></script>
     <script src="script.js"></script>
 </body>

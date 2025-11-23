@@ -205,7 +205,7 @@ function openTaskModal(column) {
   document.getElementById("taskForm").reset();
   document.getElementById("imagePreview").innerHTML = "";
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString('en-CA');
   document.getElementById("taskDate").min = today;
 
   const modal = document.getElementById("taskModal");
@@ -538,6 +538,9 @@ function editTask(taskId) {
   document.getElementById("modalTitle").textContent = "Editar Tarea";
   document.getElementById("taskTitle").value = task.titulo;
   document.getElementById("taskDescription").value = task.descripcion || "";
+
+  const today = new Date().toLocaleDateString('en-CA');
+  document.getElementById("taskDate").min = today;
   document.getElementById("taskDate").value = task.fecha_limite || "";
   document.getElementById("taskPriority").value = task.prioridad;
   document.getElementById("taskTag").value = task.curso || "";
@@ -665,6 +668,22 @@ async function handleSuggestOrder() {
       }
     }
   );
+}
+
+function showAIExplanation(explanation, count, order) {
+  const explanationText = document.getElementById("aiExplanationText");
+  const applyBtn = document.getElementById("applyOrderBtn");
+  const modal = document.getElementById("aiModal");
+
+  explanationText.textContent = explanation;
+
+  // Remove previous event listeners to avoid duplicates
+  const newApplyBtn = applyBtn.cloneNode(true);
+  applyBtn.parentNode.replaceChild(newApplyBtn, applyBtn);
+
+  newApplyBtn.addEventListener("click", () => applySuggestedOrder(order));
+
+  modal.classList.remove("hidden");
 }
 
 async function applySuggestedOrder(order) {
