@@ -72,10 +72,9 @@ $nombre_usuario = $_SESSION['nombre_completo'] ?? 'Usuario';
             <div class="kanban-column">
                 <div class="column-header">
                     <div class="column-title">
-                        <h3>Hacer</h3>
+                        <h3>Por hacer</h3>
                         <span class="task-count" data-column="todo">0</span>
                     </div>
-                    <button class="column-menu">⋮</button>
                 </div>
                 <div class="tasks-container" data-column="todo"></div>
                 <button class="btn-add-task" onclick="openTaskModal('todo')">+ Agregar Tarea</button>
@@ -88,7 +87,6 @@ $nombre_usuario = $_SESSION['nombre_completo'] ?? 'Usuario';
                         <h3>En progreso</h3>
                         <span class="task-count" data-column="inprogress">0</span>
                     </div>
-                    <button class="column-menu">⋮</button>
                 </div>
                 <div class="tasks-container" data-column="inprogress"></div>
                 <button class="btn-add-task" onclick="openTaskModal('inprogress')">+ Agregar Tarea</button>
@@ -101,7 +99,6 @@ $nombre_usuario = $_SESSION['nombre_completo'] ?? 'Usuario';
                         <h3>Hecho</h3>
                         <span class="task-count" data-column="done">0</span>
                     </div>
-                    <button class="column-menu">⋮</button>
                 </div>
                 <div class="tasks-container" data-column="done"></div>
                 <button class="btn-add-task" onclick="openTaskModal('done')">+ Agregar Tarea</button>

@@ -751,8 +751,7 @@ function escapeHtml(unsafe) {
 }
 
 function formatDate(dateString) {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  const options = { year: "numeric", month: "short", day: "numeric" };
-  return date.toLocaleDateString("es-ES", options);
+   if (!dateString) return "";
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`; // o el formato que quieras
 }
