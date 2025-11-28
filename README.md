@@ -101,7 +101,7 @@ Desarrollado con ❤️ para gestión eficiente de tareas.
 
 **Contacto:**
 
-- GitHub: [Tu GitHub]
+- GitHub: [Raivel16](https://github.com/Raivel16)
 - Email: [raivellorenzovaliente@gmail.com]
 
 ---
