@@ -65,9 +65,6 @@ if (estaAutenticado()) {
                     Crear Nueva Cuenta
                 </button>
 
-                <div class="auth-footer">
-                    <a href="#">¿Olvidaste tu contraseña?</a>
-                </div>
             </div>
 
             <div class="auth-illustration">

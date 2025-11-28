@@ -1,4 +1,6 @@
 <?php
+ini_set("log_errors", 1);
+ini_set("error_log", __DIR__ . "/../logs/ai_error.log");
 /**
  * Tasks API - Updated with File Upload Support
  * Manejo de operaciones CRUD de tareas con almacenamiento de archivos
@@ -338,15 +340,19 @@ function deleteTask() {
             respuestaJSON(false, 'Tarea no encontrada');
         }
         
-        // Eliminar imagen si existe
-        if ($tarea['imagen'] && file_exists(UPLOAD_DIR . '../' . $tarea['imagen'])) {
-            unlink(UPLOAD_DIR . '../' . $tarea['imagen']);
-            
-            // Intentar eliminar directorio de tarea si está vacío
-            $taskDir = dirname(UPLOAD_DIR . '../' . $tarea['imagen']);
-            if (is_dir($taskDir) && count(scandir($taskDir)) == 2) { // solo . y ..
-                rmdir($taskDir);
+        // Eliminar directorio de la tarea y su contenido
+        $taskDir = UPLOAD_DIR . $usuario_id . '/' . $id . '/';
+        
+        if (is_dir($taskDir)) {
+            // Obtener todos los archivos en el directorio
+            $files = glob($taskDir . '*');
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
             }
+            // Eliminar el directorio (ahora debería estar vacío)
+            rmdir($taskDir);
         }
         
         // Eliminar tarea

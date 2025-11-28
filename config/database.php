@@ -12,7 +12,7 @@ class Database {
     private $host = 'localhost';
     private $db_name = 'gestor_tareas';
     private $username = 'root';
-    private $password = '';
+    private $password = ''; // NuevaContrasena123 -> Rocky
     private $charset = 'utf8mb4';
     
     private function __construct() {

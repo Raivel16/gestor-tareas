@@ -651,6 +651,7 @@ async function handleSuggestOrder() {
 
         hideLoading();
 
+        console.log(result);
         if (result.success) {
           // Mostrar explicación y botón para aplicar
           showAIExplanation(
@@ -659,6 +660,8 @@ async function handleSuggestOrder() {
             result.data.order
           );
         } else {
+          console.error("Error:", result.error);
+          console.error("Error:", result.message);
           showToast(result.message || "Error al obtener sugerencia", "error");
         }
       } catch (error) {

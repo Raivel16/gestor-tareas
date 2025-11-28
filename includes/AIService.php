@@ -1,10 +1,15 @@
 <?php
+ini_set("log_errors", 1);
+ini_set("error_log", __DIR__ . "/../logs/ai_error.log");
 /**
  * AI Service - Groq Integration
  * Servicio para ordenamiento inteligente de tareas usando IA
  */
 
 require_once __DIR__ . '/../config/config.php';
+
+
+
 
 class AIService {
     
@@ -147,7 +152,7 @@ PROMPT;
         
         if ($error) {
             error_log("Error de cURL en Groq API: " . $error);
-            return ['success' => false, 'error' => 'Error de conexión con IA'];
+            return ['success' => false, 'error' => 'Error de conexión con IA'. $error];
         }
         
         if ($httpCode !== 200) {

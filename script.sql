@@ -41,34 +41,36 @@ CREATE TABLE tareas (
     INDEX idx_orden (usuario_id, columna, orden_posicion)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Tabla para almacenar el orden sugerido por IA
-CREATE TABLE orden_tareas (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario_id INT NOT NULL,
-    columna ENUM('todo', 'inprogress', 'done') NOT NULL,
-    orden_tipo ENUM('ai_suggested', 'user_custom') DEFAULT 'user_custom',
-    orden_ids TEXT NOT NULL COMMENT 'JSON array de IDs de tareas en orden',
-    explicacion_ia TEXT COMMENT 'Explicación del orden sugerido por IA',
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_user_column (usuario_id, columna),
-    INDEX idx_usuario_columna (usuario_id, columna)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- Insertar un usuario de prueba (password: 123456)
 -- La contraseña está hasheada con password_hash() de PHP
 INSERT INTO usuarios (nombre_completo, email, password) VALUES 
-('Usuario Demo', 'demo@gestor.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
+('Usuario Demo', 'demo@gestor.com', '$2y$12$pFemtZJ7cSxx8pFaI6N7UeLtZvPTf6WkvYEfM.BUoKjKkmMP7S/CG');
 
 -- Insertar tareas de ejemplo
 INSERT INTO tareas (usuario_id, titulo, descripcion, fecha_limite, prioridad, curso, columna, orden_posicion) VALUES
-(1, 'Implementar sistema de autenticación', 'Crear módulo completo con login, registro y recuperación de contraseña usando JWT', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'high', 'Desarrollo Web', 'todo', 1),
-(1, 'Actualizar README', 'Documentar las nuevas funcionalidades implementadas', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'low', 'Documentación', 'todo', 2),
-(1, 'Diseñar base de datos', 'Crear diagrama ER y normalizar hasta 3FN para el nuevo módulo', DATE_ADD(CURDATE(), INTERVAL 3 DAY), 'high', 'Base de Datos', 'todo', 3),
-(1, 'Revisar código legacy', 'Hacer refactoring del módulo de reportes', DATE_ADD(CURDATE(), INTERVAL 2 DAY), 'medium', 'Mantenimiento', 'todo', 4),
-(1, 'Tarea en Progreso', 'Desarrollando API REST para usuarios', DATE_ADD(CURDATE(), INTERVAL 5 DAY), 'medium', 'Backend', 'inprogress', 1),
-(1, 'Tarea Completada', 'Configuración inicial del proyecto', DATE_ADD(CURDATE(), INTERVAL -2 DAY), 'low', 'DevOps', 'done', 1);
+(1, 'Redactar el marco teórico del artículo de investigación',
+    'Elaborar el apartado del marco teórico para el artículo, incluyendo variables, definiciones clave, estudios previos y enfoques metodológicos relacionados. Requiere búsqueda bibliográfica, análisis y síntesis.',
+    '2025-12-01', 'high', 'Investigación / Artículo Académico', 'todo', 1),
+
+(1, 'Modelar problema de asignación con Método Húngaro',
+    'Formular un problema de asignación y aplicar el método húngaro para obtener la solución óptima. Incluye preparar la matriz de costos y analizar resultados.',
+    '2025-11-28', 'medium', 'Investigación Operativa / Optimización', 'todo', 2),
+
+(1, 'Desarrollar módulo para actualizar roles en el sistema',
+    'Crear la función backend para modificar un rol usando el procedimiento almacenado correspondiente. Requiere validar parámetros, gestionar errores y asegurar respuesta consistente.',
+    '2025-11-25', 'high', 'Programación / Backend', 'todo', 3),
+
+(1, 'Implementar control de permisos para páginas protegidas',
+    'Ajustar el middleware y rutas de Express para evitar acceso directo a HTMLs internos sin validar permisos. Implica revisar la secuencia de middlewares y probar diferentes casos.',
+    '2025-11-30', 'high', 'Programación / Seguridad', 'todo', 4),
+
+(1, 'Resolver un modelo de Programación Lineal para distribución óptima',
+    'Definir un modelo de PL para un caso de distribución y resolverlo con simplex o software especializado. Incluye interpretación detallada de resultados.',
+    '2025-12-04', 'medium', 'Investigación Operativa / Modelos Matemáticos', 'todo', 5);
+
+
 
 SELECT 'Base de datos creada/reseteada exitosamente' AS mensaje;
 SELECT 'Usuario demo: demo@gestor.com / 123456' AS info;
