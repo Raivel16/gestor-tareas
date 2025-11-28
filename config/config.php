@@ -5,7 +5,7 @@
  */
 
 // Groq AI Configuration
-define('GROQ_API_KEY', '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');
+define('GROQ_API_KEY', 'YOUR API KEY');
 define('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions');
 define('GROQ_MODEL', 'llama-3.3-70b-versatile');
 

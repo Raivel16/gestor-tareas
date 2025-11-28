@@ -1,6 +1,6 @@
 # Gestor de Tareas - Task Management System
 
-Sistema profesional de gestión de tareas con tablero Kanban, soporte de imágenes, ordenamiento inteligente con IA y despliegue en Rocky Linux.
+Sistema profesional de gestión de tareas con tablero Kanban, soporte de imágenes y ordenamiento inteligente con IA.
 
 ## 🚀 Características
 
