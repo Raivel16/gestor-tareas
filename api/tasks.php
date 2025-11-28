@@ -223,7 +223,7 @@ function updateTask() {
         $prioridad = $data['priority'] ?? 'medium';
         $curso = sanitizar($data['tag'] ?? '');
         $imageFile = null;
-        $keepImage = true;
+        $keepImage = $data['keep_image'] ?? true;
     }
     
     // Validaciones
